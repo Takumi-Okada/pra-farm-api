@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 from fastapi import Response, Request, Depends
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from schemas import UserBody, SuccessMsg, UserInfo, Csrf
 from database import (
     db_signup,
@@ -16,24 +17,25 @@ auth = AuthJwtCsrf()
 
 @router.get("/api/csrftoken", response_model=Csrf)
 def get_csrf_token(csrf_protect: CsrfProtect = Depends()):
-    csrf_token = csrf_protect.generate_csrf()
-    res = {'csrf_token': csrf_token}
+    csrf_token, signed_token = csrf_protect.generate_csrf_tokens()
+    res = JSONResponse(content={'csrf_token': csrf_token})
+    csrf_protect.set_csrf_cookie(signed_token, res)
     return res
 
 
 @router.post("/api/register", response_model=UserInfo)
 async def signup(request: Request, user: UserBody, csrf_protect: CsrfProtect = Depends()):
-    csrf_token = csrf_protect.get_csrf_from_headers(request.headers)
-    csrf_protect.validate_csrf(csrf_token)
+    await csrf_protect.validate_csrf(request)
     user = jsonable_encoder(user)
     new_user = await db_signup(user)
-    return new_user
+    res = JSONResponse(content=new_user)
+    csrf_protect.unset_csrf_cookie(res)
+    return res
 
 
 @router.post("/api/login", response_model=SuccessMsg)
 async def login(request: Request, response: Response, user: UserBody, csrf_protect: CsrfProtect = Depends()):
-    csrf_token = csrf_protect.get_csrf_from_headers(request.headers)
-    csrf_protect.validate_csrf(csrf_token)
+    await csrf_protect.validate_csrf(request)
     user = jsonable_encoder(user)
     token = await db_login(user)
     response.set_cookie(
@@ -42,9 +44,8 @@ async def login(request: Request, response: Response, user: UserBody, csrf_prote
 
 
 @router.post("/api/logout", response_model=SuccessMsg)
-def logout(request: Request, response: Response, csrf_protect: CsrfProtect = Depends()):
-    csrf_token = csrf_protect.get_csrf_from_headers(request.headers)
-    csrf_protect.validate_csrf(csrf_token)
+async def logout(request: Request, response: Response, csrf_protect: CsrfProtect = Depends()):
+    await csrf_protect.validate_csrf(request)
     response.set_cookie(key="access_token", value="",
                         httponly=True, samesite="none", secure=True)
     return {'message': 'Successfully logged-out'}

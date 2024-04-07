@@ -15,8 +15,8 @@ auth = AuthJwtCsrf()
 
 @router.post("/api/todo", response_model=Todo)
 async def create_todo(request: Request, response: Response, data: TodoBody, csrf_protect: CsrfProtect = Depends()):
-    new_token = auth.verify_csrf_update_jwt(
-        request, csrf_protect, request.headers)
+    new_token = await auth.verify_csrf_update_jwt(
+        request, csrf_protect)
     todo = jsonable_encoder(data)
     res = await db_create_todo(todo)
     response.status_code = HTTP_201_CREATED
@@ -30,7 +30,7 @@ async def create_todo(request: Request, response: Response, data: TodoBody, csrf
 
 @router.get("/api/todo", response_model=List[Todo])
 async def get_todos(request: Request):
-    # auth.verify_jwt(request)
+    auth.verify_jwt(request)
     res = await db_get_todos()
     return res
 
@@ -49,8 +49,8 @@ async def get_single_todo(request: Request, response: Response, id: str):
 
 @router.put("/api/todo/{id}", response_model=Todo)
 async def update_todo(request: Request, response: Response, id: str, data: TodoBody, csrf_protect: CsrfProtect = Depends()):
-    new_token = auth.verify_csrf_update_jwt(
-        request, csrf_protect, request.headers)
+    new_token = await auth.verify_csrf_update_jwt(
+        request, csrf_protect)
     todo = jsonable_encoder(data)
     res = await db_update_todo(id, todo)
     response.set_cookie(
@@ -63,8 +63,8 @@ async def update_todo(request: Request, response: Response, id: str, data: TodoB
 
 @router.delete("/api/todo/{id}", response_model=SuccessMsg)
 async def delete_todo(request: Request, response: Response, id: str, csrf_protect: CsrfProtect = Depends()):
-    new_token = auth.verify_csrf_update_jwt(
-        request, csrf_protect, request.headers)
+    new_token = await auth.verify_csrf_update_jwt(
+        request, csrf_protect)
     res = await db_delete_todo(id)
     response.set_cookie(
         key="access_token", value=f"Bearer {new_token}", httponly=True, samesite="none", secure=True)
